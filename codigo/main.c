@@ -2,20 +2,10 @@
 #include "string_utils.h"
 
 int main() {
-    char texto[] = "Software Basico - Ligacao Estatica";
-
-    printf("==========================================\n");
-    printf("Texto Original: \"%s\"\n", texto);
-    printf("==========================================\n");
-
-    // 1. Chamando a função my_strlen (escrita em Assembly)
+    char texto[] = "Software Basico";
     long long tamanho = my_strlen(texto);
-    printf("Tamanho (my_strlen em Assembly): %lld caracteres\n", tamanho);
-
-    // 2. Chamando a função my_reverse (escrita em Assembly)
+    printf("Tamanho: %lld\n", tamanho);
     my_reverse(texto);
-    printf("Texto Invertido (my_reverse em Assembly): \"%s\"\n", texto);
-    printf("==========================================\n");
-
+    printf("Invertido: %s\n", texto);
     return 0;
 }

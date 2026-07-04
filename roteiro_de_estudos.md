@@ -34,18 +34,19 @@
 > Apresentar rapidamente os tópicos que serão abordados.
 
 **Fala sugerida:**
-> "Primeiro vamos contextualizar onde o Ligador se encaixa no processo de compilação, depois vamos para as definições, as etapas internas do processo, prós e contras, e por fim um exemplo prático."
+> "Primeiro vamos contextualizar onde o Ligador se encaixa no processo de construção do programa, depois vamos para as definições, as etapas internas do processo, prós e contras, e por fim um exemplo prático."
 
 ---
 
-### Slide 3 – Pipeline de Compilação (Contexto)
-> Usar o diagrama para mostrar que o Linker é a ÚLTIMA etapa antes de gerar o executável.
+### Slide 3 – Do Código-Fonte à Execução (Contexto)
+> Usar o diagrama para separar compilador, montador, linker e loader.
 
 **Pontos-chave para falar:**
 - O código-fonte passa por: Pré-processador → Compilador → Montador → e gera arquivos-objeto (.o)
 - Os arquivos `.o` são **código de máquina**, mas **incompletos** — eles têm referências a funções/variáveis que podem estar em *outros* arquivos
 - O **Linker** pega todos esses `.o` e resolve essas referências, gerando o executável final
-- Sem o Linker, cada arquivo `.o` seria inútil sozinho
+- O **Loader** mapeia os segmentos do executável na memória e inicia o processo
+- O `gcc` é um driver: `-S` para após a compilação; `-c` também aciona o montador, mas não o linker
 
 **Conceito importante para estudar:**
 - Arquivo-objeto (.o) contém: código de máquina + tabela de símbolos + informações de relocação
@@ -96,17 +97,25 @@
 ### Slide 6 – O que é Ligação Estática?
 
 **Pontos-chave para falar:**
-- Na ligação estática, TODO o código necessário é copiado para dentro do executável
-- O executável resultante é **autossuficiente** — pode rodar em qualquer máquina compatível, sem precisar de bibliotecas instaladas
-- Isso é o oposto da ligação dinâmica, onde o executável depende de `.so`/`.dll` externas
+- Em **tempo de ligação**, o linker extrai de uma biblioteca `.a` os módulos objeto necessários para resolver referências pendentes
+- A biblioteca `.a` não precisa acompanhar o programa depois que seus módulos são incorporados
+- Usar uma `.a` não garante que o executável inteiro seja estático; outras bibliotecas, como a libc, podem continuar dinâmicas
+- Um executável completamente estático reduz dependências em tempo de execução, mas continua dependente da arquitetura, do sistema e das interfaces disponíveis
 - Usar o diagrama comparativo para mostrar visualmente a diferença de tamanho
 
 **Quando ligação estática é usada na prática:**
-- Sistemas embarcados (não tem sistema operacional completo)
-- Distribuição de ferramentas CLI (ex: binários Go são estaticamente ligados por padrão)
-- Containers Docker (para criar imagens menores sem precisar instalar dependências)
+- Alguns sistemas embarcados
+- Utilitários de linha de comando distribuídos como binário único
+- Alguns containers mínimos, dependendo da libc e da configuração da aplicação
 
-**Flag para o GCC:** `gcc -static programa.c -o programa`
+**Duas situações diferentes:**
+```bash
+# Apenas libstrutils.a é ligada estaticamente; a libc pode permanecer dinâmica
+gcc main.o ./libstrutils.a -o programa_misto
+
+# Executável completamente estático; requer as bibliotecas estáticas instaladas
+gcc -static main.o ./libstrutils.a -o programa
+```
 
 ---
 
@@ -126,11 +135,12 @@
 
 **Pontos-chave para falar:**
 - Cada arquivo `.o` tem uma **tabela de símbolos** que lista:
-  - Símbolos **definidos** naquele arquivo (ex: a função `somar` foi escrita aqui)
+  - Símbolos **definidos** naquele arquivo; globais podem resolver referências externas, enquanto locais permanecem restritos ao módulo
   - Símbolos **indefinidos** / referências externas (ex: chama `printf`, mas `printf` não está nesse arquivo)
 - O ligador percorre todos os `.o` e faz o "casamento": para cada referência indefinida, procura qual `.o` ou biblioteca define aquele símbolo
 - Se NÃO encontrar: **erro de ligação** → `undefined reference to 'funcao'`
-- Se encontrar MÚLTIPLAS definições: **erro de múltipla definição** → `multiple definition of 'funcao'`
+- Se encontrar mais de uma definição global forte: **erro de múltipla definição** → `multiple definition of 'funcao'`
+- Uma definição fraca pode ser substituída por uma definição forte
 - Usar o diagrama de resolução para mostrar visualmente
 
 **Pergunta que podem fazer:**
@@ -142,19 +152,19 @@
 ### Slide 9 – Relocação de Endereços (Etapa 2)
 
 **Pontos-chave para falar:**
-- **Problema:** cada arquivo `.o` é compilado como se começasse no endereço 0x0000
-- Quando o linker junta vários `.o`, os endereços vão colidir
-- **Solução:** o linker atribui novos endereços absolutos para cada seção de cada `.o`
-- Depois, percorre TODO o código e atualiza cada referência com o endereço correto
+- Um arquivo `.o` é **relocável**: contém offsets relativos às suas seções, símbolos e entradas de relocação
+- As entradas de relocação indicam exatamente quais referências dependem da posição final
+- O linker organiza as seções de entrada, atribui posições no arquivo final e aplica as correções necessárias
+- Em AMD64, muitas referências são codificadas como deslocamentos relativos ao RIP, não como endereços absolutos
 
 **Exemplo simples:**
-- `main.o` tem `.text` começando em 0x0000, linker coloca em 0x1000
-- `math.o` tem `.text` começando em 0x0000, linker coloca em 0x2000
-- Toda chamada a `somar()` dentro de `main.o` precisa ser atualizada para apontar para 0x2000+offset
+- `main.o` contém uma chamada a `somar` cujo destino ainda está pendente
+- `math.o` define `somar` em um offset de sua seção `.text`
+- Depois de posicionar as seções, o linker calcula o deslocamento correto da instrução `call`
 
 **Conceito importante:**
-- **Entradas de relocação** = instruções dentro do `.o` que dizem ao linker: "aqui tem um endereço que precisa ser corrigido"
-- Você pode ver essas entradas com `objdump -r arquivo.o`
+- **Entradas de relocação** são registros de metadados, não instruções, que identificam o local, o símbolo e o tipo de correção
+- Você pode vê-las com `readelf -r arquivo.o` ou `objdump -r arquivo.o`
 
 ---
 
@@ -168,32 +178,33 @@
 - Gera o **header** do arquivo (ELF Header no Linux) que contém:
   - O **entry point** — endereço da primeira instrução (geralmente `_start` → `main`)
   - Informações sobre o formato, arquitetura, etc.
+- Gera os **Program Headers**, que descrevem os segmentos que o loader deve mapear na memória
 - Resultado: um arquivo ELF que o sistema operacional sabe carregar e executar
 
 **Formato ELF (Executable and Linkable Format):**
 - É o formato padrão de executáveis no Linux
-- Contém: header + seções de código + seções de dados + tabela de símbolos
+- Contém ELF Header, Program Headers, segmentos e seções
+- A tabela completa de símbolos `.symtab` é útil para depuração e análise, mas pode ser removida com `strip`
 - Equivalente no Windows: PE (Portable Executable)
 
 ---
 
 ### Slide 11 – Vantagens e Desvantagens
 
-**Vantagens — explicar cada uma:**
-1. **Portabilidade:** o executável roda em qualquer máquina com a mesma arquitetura, sem precisar instalar nada
-2. **Desempenho:** não tem overhead de carregar bibliotecas em tempo de execução
-3. **Confiabilidade:** imune ao "DLL Hell" (quando programas diferentes precisam de versões diferentes da mesma `.dll`)
-4. **Distribuição simples:** basta copiar um arquivo
+**Vantagens — explicar como tendências, não garantias:**
+1. **Distribuição potencialmente mais simples:** reduz a quantidade de bibliotecas que precisam acompanhar o programa
+2. **Menor risco de bibliotecas ausentes ou incompatíveis:** a versão incorporada permanece sob controle da aplicação
+3. **Inicialização potencialmente mais simples:** parte da resolução dinâmica deixa de ser necessária
+4. **Reprodutibilidade:** o código incorporado não muda quando uma biblioteca compartilhada do sistema é atualizada
 
 **Desvantagens — explicar cada uma:**
-1. **Tamanho maior:** todo o código da biblioteca é copiado, mesmo que você use só uma função
-2. **Duplicação:** se 10 programas usam a `libc` estaticamente, cada um tem sua própria cópia na memória
-3. **Atualização difícil:** se a biblioteca recebe um patch de segurança, é preciso recompilar e redistribuir todos os programas
-4. **Consumo de memória:** mais memória RAM usada por causa da duplicação
+1. **Tamanho:** o executável tende a ser maior que um equivalente que compartilha bibliotecas
+2. **Duplicação:** programas diferentes podem carregar cópias próprias do mesmo código
+3. **Atualização:** corrigir código incorporado exige nova ligação e redistribuição
+4. **Disponibilidade:** algumas bibliotecas de sistema não oferecem uma versão estática
 
 **Caso de uso para mencionar:**
-- Go compila tudo estaticamente por padrão → facilita deploy, mas binários são grandes
-- Rust permite escolher entre estático e dinâmico
+- Go e Rust podem produzir binários com diferentes graus de ligação estática, dependendo da plataforma, da libc e das opções de construção
 
 ---
 
@@ -209,13 +220,13 @@
 ### Slide 13 – Exemplo Prático: Processo
 
 **Pontos-chave para falar:**
-- **Passo 1:** `gcc -c` compila sem linkar → gera arquivos `.o`
-- **Passo 2:** `ar rcs` cria a biblioteca estática `.a` empacotando o `.o`
+- **Passo 1:** `as` monta `my_strlen.s`, `my_reverse.s` e `nao_usada.s`, gerando arquivos `.o`
+- **Passo 2:** `ar rcs` cria `libstrutils.a` com os três módulos objeto
   - `r` = replace, `c` = create, `s` = index (para busca rápida de símbolos)
-- **Passo 3:** `gcc -static` faz a ligação estática
-  - `-L.` = procurar bibliotecas no diretório atual
-  - `-lmath` = procurar `libmath.a` (convenção: `-l<nome>` → `lib<nome>.a`)
-  - `-static` = forçar ligação estática
+- **Passo 3:** `gcc -c main.c -o main.o` produz o objeto que referencia as funções
+- **Passo 4:** `gcc main.o ./libstrutils.a -o programa_misto` incorpora a `.a`, mas pode manter a libc dinâmica
+- **Passo 5:** `gcc -static main.o ./libstrutils.a -o programa` tenta produzir um executável completamente estático
+- A ordem importa: `main.o` aparece antes da biblioteca que resolve suas referências
 
 **Dica:** se possível, demonstrar ao vivo no terminal durante a apresentação!
 
@@ -224,11 +235,12 @@
 ### Slide 14 – Exemplo Prático: Saída
 
 **Pontos-chave para falar:**
-- `./programa` funciona e mostra "Soma: 8" e "Produto: 15"
+- `./programa` mostra `Tamanho: 15` e `Invertido: ocisaB erawtfoS`
 - `file programa` confirma que é "statically linked"
-- `nm programa` mostra os símbolos — `somar` e `multiplicar` estão lá com endereços finais (não mais 0x0000)
-- Comparação de tamanho: estático (~872K) vs dinâmico (~17K) — diferença gritante!
-  - Isso porque na versão estática, toda a `libc` foi incluída
+- `nm main.o` mostra `U my_strlen` e `U my_reverse`
+- `nm programa` mostra as duas funções definidas com `T`; os endereços variam conforme plataforma e opções
+- `nm programa | grep funcao_nao_usada` não produz saída, demonstrando que `nao_usada.o` não foi extraído
+- Não use tamanhos fixos como regra: eles dependem da libc, do linker, de otimizações e de `strip`
 
 ---
 
@@ -236,8 +248,8 @@
 
 **Pontos-chave para falar:**
 - `ar -t` lista os `.o` dentro do `.a`
-- `nm math_utils.o` mostra os símbolos antes da ligação — note que os endereços começam em 0x0000
-- O diagrama visual mostra a estrutura hierárquica: `.a` → `.o` → funções
+- `nm -g --defined-only libstrutils.a` mostra os símbolos globais definidos em cada membro
+- O diagrama mostra `my_strlen.o`, `my_reverse.o` e `nao_usada.o`
 - Uma biblioteca `.a` pode conter muitos `.o` — o linker extrai apenas os necessários
 
 ---
@@ -260,20 +272,21 @@
 ## 🧠 Conceitos Importantes para Estudar (Possíveis Perguntas)
 
 ### 1. Qual a diferença entre compilação e ligação?
-A **compilação** traduz código-fonte para código de máquina (gera `.o`). A **ligação** combina múltiplos `.o` e resolve referências entre eles para gerar o executável.
+A **compilação** traduz uma linguagem de alto nível para Assembly. O **montador** transforma Assembly em arquivo objeto `.o`. A **ligação** combina objetos e bibliotecas, resolve símbolos e aplica relocações. O **loader** mapeia os segmentos do executável na memória e inicia o processo. O comando `gcc -c` é um driver que aciona mais de uma dessas ferramentas.
 
 ### 2. O que é uma tabela de símbolos?
 É uma estrutura de dados dentro de cada `.o` que lista: nomes de funções e variáveis globais, seus endereços (ou marcação como "undefined" se são externas), e seu escopo (local ou global).
 
 ### 3. O que é relocação?
-É o processo de recalcular endereços de memória quando múltiplos `.o` são combinados. Cada `.o` tem endereços relativos (começando em 0x0), e o linker converte para endereços absolutos no executável final.
+É o processo no qual o linker posiciona as seções de entrada e corrige as referências marcadas por entradas de relocação. A correção pode gerar endereços absolutos ou deslocamentos relativos, como referências relativas ao RIP em AMD64.
 
 ### 4. Diferença entre `.a` e `.so`?
-- `.a` (estática): código copiado para o executável, maior, independente
-- `.so` (dinâmica): código carregado em runtime, menor, dependente
+- `.a`: arquivo que reúne módulos objeto; os membros necessários podem ser incorporados pelo linker
+- `.so`: biblioteca compartilhada referenciada na ligação e carregada/mapeada durante a execução
+- Usar uma `.a` não implica que todas as demais dependências do executável sejam estáticas
 
 ### 5. O que é "DLL Hell"?
-Problema que ocorre quando diferentes programas precisam de versões diferentes da mesma biblioteca dinâmica, causando conflitos. A ligação estática evita isso.
+Problema de incompatibilidade entre versões de bibliotecas compartilhadas. Incorporar uma versão pode reduzir esse risco específico, mas não torna o programa imune a incompatibilidades de sistema, ABI ou outras dependências.
 
 ### 6. Por que o GCC usa ligação dinâmica por padrão?
 Para economizar espaço em disco e memória, e permitir atualizações de bibliotecas sem recompilar os programas.
@@ -284,12 +297,16 @@ O linker emite erro: `undefined reference to 'nome_da_funcao'`. O programa não 
 ### 8. Comandos úteis para lembrar:
 | Comando | O que faz |
 |---------|-----------|
-| `gcc -c arquivo.c` | Compila sem linkar (gera `.o`) |
+| `gcc -S arquivo.c -o arquivo.s` | Para após gerar Assembly |
+| `as arquivo.s -o arquivo.o` | Monta Assembly em objeto |
+| `gcc -c arquivo.c -o arquivo.o` | Driver que produz `.o` sem executar a ligação |
 | `ar rcs lib.a obj.o` | Cria biblioteca estática |
-| `gcc -static main.o -lbib` | Ligação estática |
+| `gcc main.o ./lib.a -o programa_misto` | Incorpora a `.a`; outras bibliotecas podem ser dinâmicas |
+| `gcc -static main.o ./lib.a -o programa` | Solicita um executável completamente estático |
 | `nm arquivo` | Lista símbolos |
 | `file arquivo` | Mostra tipo do arquivo |
-| `objdump -r arquivo.o` | Mostra entradas de relocação |
+| `readelf -r arquivo.o` | Mostra entradas de relocação |
+| `readelf -l executavel` | Mostra Program Headers e segmentos |
 | `ldd executavel` | Lista dependências dinâmicas |
 | `readelf -h executavel` | Mostra header ELF |
 

@@ -1,5 +1,5 @@
 % ============================================================
-% Seminário – Software Básico
+% Seminário - Software Básico
 % Grupo 2: Ligador (Linker), Bibliotecas e Ligação Estática
 % ============================================================
 \documentclass[aspectratio=169, 11pt]{beamer}
@@ -84,32 +84,43 @@
 \section{Contexto}
 % ============================================================
 
-\begin{frame}{Pipeline de Compilação}
+\begin{frame}{Cada Ferramenta Produz a Entrada da Próxima}
   \begin{center}
+    \resizebox{0.98\linewidth}{!}{
     \begin{tikzpicture}[
-      node distance=1.4cm,
-      block/.style={draw=primary!40, fill=lightbg, rounded corners=3pt, minimum width=1.8cm, minimum height=0.7cm, align=center, font=\scriptsize},
+      block/.style={draw=primary!40, fill=lightbg, rounded corners=3pt,
+                    minimum width=2.0cm, minimum height=0.75cm,
+                    align=center, font=\scriptsize},
       arrow/.style={->, >=stealth, thick, color=primary!60}
     ]
-      \node[block] (src) {Código Fonte\\(.c)};
-      \node[block, right of=src, node distance=2.5cm] (compiler) {Compilador /\\Montador};
-      \node[block, right of=compiler, node distance=2.5cm] (obj) {Arq. Objeto\\(.o)};
-      \node[block, right of=obj, node distance=2.5cm] (linker) {\textbf{Ligador}\\(Linker)};
-      \node[block, right of=linker, node distance=2.5cm] (exec) {Executável\\Final};
+      \node[block] (csrc) at (0,0.8) {Código C\\\texttt{main.c}};
+      \node[block] (compiler) at (2.5,0.8) {Compilador\\\texttt{gcc -S}};
+      \node[block] (generatedasm) at (5.0,0.8) {Assembly gerado\\\texttt{main.s}};
+      \node[block] (asmsrc) at (5.0,-1.2) {Assembly escrito\\\texttt{funcoes.s}};
+      \node[block] (assembler) at (7.5,0.8) {Montador\\\texttt{as}};
+      \node[block] (objs) at (10.0,0.8) {Arquivos objeto\\\texttt{.o}};
+      \node[block, fill=accent!10, draw=accent] (linker) at (12.5,0.8) {\textbf{Ligador}\\(Linker)};
+      \node[block] (exec) at (15.0,0.8) {Executável\\ELF};
+      \node[block] (loader) at (15.0,-1.2) {Loader\\Processo em memória};
+      \node[block] (libs) at (12.5,-1.2) {Bibliotecas\\\texttt{.a} / \texttt{.so}};
 
-      \draw[arrow] (src) -- (compiler);
-      \draw[arrow] (compiler) -- (obj);
-      \draw[arrow] (obj) -- (linker);
-      \draw[arrow] (linker) -- (exec);
-
-      \node[block, below of=linker, node distance=1.2cm] (libs) {Bibliotecas\\(.a / .lib)};
+      \draw[arrow] (csrc) -- (compiler);
+      \draw[arrow] (compiler) -- (generatedasm);
+      \draw[arrow] (generatedasm) -- (assembler);
+      \draw[arrow] (assembler) -- (objs);
+      \draw[arrow] (asmsrc) -- (assembler);
+      \draw[arrow] (objs) -- (linker);
       \draw[arrow] (libs) -- (linker);
-    \end{tikzpicture}
+      \draw[arrow] (linker) -- (exec);
+      \draw[arrow] (exec) -- (loader);
+    \end{tikzpicture}}
   \end{center}
-  \vspace{0.2cm}
-  \begin{center}
-    O \alert{Linker} é a \textbf{última etapa} antes do executável final.
-  \end{center}
+  \vspace{0.15cm}
+  \begin{block}{As fronteiras importam}
+    \small O \texttt{gcc} é um driver: com \texttt{-S}, ele para antes do montador.
+    O \textbf{linker constrói} o executável; o \textbf{loader} mapeia seus segmentos
+    na memória e inicia o processo.
+  \end{block}
 \end{frame}
 
 % ============================================================
@@ -169,7 +180,7 @@
       \begin{exampleblock}{Biblioteca Estática}
         \begin{itemize}
           \item Extensão: \texttt{.a} / \texttt{.lib}
-          \item Código \textbf{copiado} para o executável
+          \item Módulos \textbf{necessários} incorporados ao executável
           \item Criada com \texttt{ar rcs}
         \end{itemize}
       \end{exampleblock}
@@ -188,28 +199,41 @@
 
 \begin{frame}{Ligação Estática}
   \begin{columns}[T]
-    \begin{column}{0.50\textwidth}
+    \begin{column}{0.53\textwidth}
       \begin{block}{Definição}
-        Processo em que todo o código das bibliotecas é \textbf{incorporado} no executável em \textbf{tempo de compilação}.
+        \small Processo realizado em \textbf{tempo de ligação} no qual os
+        \textbf{módulos necessários} de uma biblioteca estática são incorporados ao executável.
       \end{block}
-      \vspace{0.4cm}
-      \cmark \; Executável \textbf{autossuficiente}\\[0.25cm]
-      \cmark \; Não depende de \texttt{.so}/\texttt{.dll}\\[0.25cm]
-      \cmark \; Arquivo \textbf{maior}, mas \textbf{independente}
+      \vspace{-0.05cm}
+      {\small
+      \begin{itemize}
+        \mreducelistspacing
+        \item A biblioteca \texttt{.a} não precisa acompanhar o programa.
+        \item O linker seleciona os objetos que resolvem símbolos pendentes.
+        \item O resultado tende a ser mais independente, porém maior.
+      \end{itemize}}
+      \vspace{-0.08cm}
+      {\scriptsize\textbf{Atenção:} usar uma biblioteca \texttt{.a} não torna todo
+      o executável estático; outras bibliotecas podem permanecer dinâmicas.}
     \end{column}
-    \begin{column}{0.47\textwidth}
+    \begin{column}{0.44\textwidth}
       \begin{center}
         \begin{tikzpicture}[
-          box/.style={draw=primary!30, fill=lightbg, rounded corners=3pt, minimum width=3.8cm, minimum height=1.5cm, align=center, font=\scriptsize},
-          subbox/.style={draw=accent, fill=accent!10, rounded corners=2pt, minimum width=3.2cm, minimum height=0.45cm, align=center, font=\tiny\bfseries}
+          box/.style={draw=primary!30, fill=lightbg, rounded corners=3pt,
+                      minimum width=3.9cm, minimum height=1.55cm,
+                      align=center, font=\scriptsize},
+          subbox/.style={draw=accent, fill=accent!10, rounded corners=2pt,
+                         minimum width=3.25cm, minimum height=0.45cm,
+                         align=center, font=\tiny\bfseries}
         ]
           \node[box, label={[font=\scriptsize\bfseries]above:Ligação Estática}] (static) {};
-          \node[subbox] (code) at (static.center) [yshift=0.3cm] {Código do Programa};
-          \node[subbox] (lib) at (static.center) [yshift=-0.3cm] {Biblioteca (.a) Incorporada};
+          \node[subbox] at (static.center) [yshift=0.3cm] {Código do Programa};
+          \node[subbox] at (static.center) [yshift=-0.3cm] {Objetos necessários da \texttt{.a}};
 
-          \node[box, below of=static, node distance=2.2cm, label={[font=\scriptsize\bfseries]above:Ligação Dinâmica}] (dynamic) {};
-          \node[subbox] (code2) at (dynamic.center) [yshift=0.3cm] {Código do Programa};
-          \node[subbox, fill=white, draw=gray, dashed] (lib2) at (dynamic.center) [yshift=-0.3cm] {Referência a Biblioteca (.so)};
+          \node[box, below of=static, node distance=2.3cm,
+                label={[font=\scriptsize\bfseries]above:Ligação Dinâmica}] (dynamic) {};
+          \node[subbox] at (dynamic.center) [yshift=0.3cm] {Código do Programa};
+          \node[subbox, fill=white, draw=gray, dashed] at (dynamic.center) [yshift=-0.3cm] {Referência a Biblioteca \texttt{.so}};
         \end{tikzpicture}
       \end{center}
     \end{column}
@@ -243,9 +267,9 @@
   \end{center}
   \vspace{0.3cm}
   \begin{enumerate}
-    \item \textbf{Resolução de Símbolos} — associa cada referência à sua definição
-    \item \textbf{Relocação} — ajusta endereços para o espaço de memória final
-    \item \textbf{Geração} — mescla seções \texttt{.text}, \texttt{.data}, \texttt{.bss} no executável
+    \item \textbf{Resolução de Símbolos}: associa cada referência à sua definição
+    \item \textbf{Relocação}: organiza seções e corrige referências dependentes da posição
+    \item \textbf{Geração}: produz o ELF final, seus segmentos e o ponto de entrada
   \end{enumerate}
 \end{frame}
 
@@ -253,16 +277,20 @@
   \begin{columns}[T]
     \begin{column}{0.46\textwidth}
       \begin{block}{Como funciona?}
+        \scriptsize
         \begin{itemize}
-          \item Cada \texttt{.o} tem uma \textbf{tabela de símbolos}
-          \item Símbolos \textbf{definidos} — funções/variáveis locais
-          \item Símbolos \textbf{indefinidos} — referências externas
-          \item Ligador \textbf{casa} referências $\leftrightarrow$ definições
+          \item Cada \texttt{.o} contém uma \textbf{tabela de símbolos}.
+          \item Um \textbf{global definido} pode resolver referências externas;
+                um símbolo local só vale no próprio módulo.
+          \item Um \textbf{indefinido} ainda precisa de uma definição externa.
         \end{itemize}
       \end{block}
-      \vspace{0.3cm}
-      \begin{alertblock}{Erro comum}
-        \texttt{undefined reference to `func'}
+      \vspace{0.05cm}
+      \begin{alertblock}{Quando a resolução falha}
+        \scriptsize
+        \texttt{undefined reference}: nenhuma definição encontrada.\\
+        \texttt{multiple definition}: mais de uma definição global forte.\\
+        Uma definição fraca pode ser substituída por uma forte.
       \end{alertblock}
     \end{column}
     \begin{column}{0.51\textwidth}
@@ -292,56 +320,59 @@
 
 \begin{frame}{Relocação de Endereços}
   \begin{block}{Problema}
-    Cada \texttt{.o} assume endereço inicial \textbf{0x0}.
-    Quando combinados, os endereços \textbf{colidem}.
+    Um arquivo \texttt{.o} é \textbf{relocável}: contém offsets relativos às suas seções,
+    símbolos e registros que indicam quais posições deverão ser corrigidas pelo linker.
   \end{block}
-  \vspace{0.3cm}
+  \vspace{0.25cm}
   \begin{columns}[T]
     \begin{column}{0.47\textwidth}
-      \begin{exampleblock}{Antes \normalfont(endereços relativos)}
-        \texttt{main.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x0000}\\
-        \texttt{math.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x0000}
+      \begin{exampleblock}{Antes \normalfont(referências relocáveis)}
+        \texttt{main.o}: \texttt{call somar} $\rightarrow$ destino pendente\\
+        \texttt{math.o}: \texttt{somar} no offset \texttt{0x0000} de sua \texttt{.text}
       \end{exampleblock}
     \end{column}
     \begin{column}{0.47\textwidth}
-      \begin{block}{Depois \normalfont(endereços absolutos)}
-        \texttt{main.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x1000}\\
-        \texttt{math.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x2000}
+      \begin{block}{Depois \normalfont(layout final)}
+        \texttt{main.o}: \texttt{call} com deslocamento corrigido\\
+        \texttt{math.o}: função posicionada, por exemplo, em \texttt{0x401020}
       \end{block}
     \end{column}
   \end{columns}
-  \vspace{0.4cm}
+  \vspace{0.3cm}
   \begin{center}
-    O ligador \alert{recalcula} todos os endereços para posições finais no executável.
+    O linker \alert{organiza as seções}, atribui posições finais e aplica as relocações.
+    Em AMD64, muitas referências finais são relativas ao registrador de instruções (RIP).
   \end{center}
 \end{frame}
 
 \begin{frame}{Geração do Executável}
   \begin{columns}[T]
-    \begin{column}{0.53\textwidth}
+    \begin{column}{0.55\textwidth}
       \begin{block}{Arquivo gerado}
         Formato \textbf{ELF} (Linux) ou \textbf{PE} (Windows):
       \end{block}
-      \vspace{0.2cm}
+      \vspace{0.15cm}
+      {\small
       \begin{itemize}
-        \item \textbf{\texttt{.text}} — código de máquina
-        \item \textbf{\texttt{.data}} — variáveis inicializadas
-        \item \textbf{\texttt{.bss}} — variáveis não inicializadas
-        \item \textbf{Header} — metadados, entry point
-        \item \textbf{Symbol Table} — para depuração
+        \item \textbf{ELF Header}: metadados e ponto de entrada
+        \item \textbf{Program Headers}: segmentos que o loader mapeia na memória
+        \item \textbf{\texttt{.text}} e \textbf{\texttt{.rodata}}: código e constantes
+        \item \textbf{\texttt{.data}} e \textbf{\texttt{.bss}}: dados inicializados e não inicializados
+        \item \textbf{Tabela de símbolos}: útil para análise, mas pode ser removida com \texttt{strip}
       \end{itemize}
+      }
     \end{column}
-    \begin{column}{0.42\textwidth}
+    \begin{column}{0.40\textwidth}
       \begin{center}
       \begin{tikzpicture}[
-        sec/.style={draw=primary!25, fill=lightbg, minimum width=4.2cm,
-                    minimum height=0.7cm, align=center, font=\small},
+        sec/.style={draw=primary!25, fill=lightbg, minimum width=4.0cm,
+                    minimum height=0.58cm, align=center, font=\scriptsize}
       ]
-        \node[sec, fill=primary, font=\small\color{white}\bfseries] at (0,3.2) {ELF Header};
-        \node[sec] at (0,2.4) {\texttt{.text} (código)};
-        \node[sec] at (0,1.6) {\texttt{.data} (dados)};
-        \node[sec] at (0,0.8) {\texttt{.bss}};
-        \node[sec] at (0,0) {Tabela de Símbolos};
+        \node[sec, fill=primary, font=\scriptsize\color{white}\bfseries] at (0,3.45) {ELF Header};
+        \node[sec, fill=accent!10] at (0,2.75) {Program Headers};
+        \node[sec] at (0,2.05) {\texttt{.text} / \texttt{.rodata}};
+        \node[sec] at (0,1.35) {\texttt{.data} / \texttt{.bss}};
+        \node[sec, fill=gray!10] at (0,0.65) {Tabela de símbolos (opcional)};
       \end{tikzpicture}
       \end{center}
     \end{column}
@@ -352,32 +383,34 @@
 \section{Vantagens e Desvantagens}
 % ============================================================
 
-\begin{frame}{Ligação Estática — Prós e Contras}
+\begin{frame}{Ligação Estática - Prós e Contras}
   \begin{columns}[T]
     \begin{column}{0.47\textwidth}
       \begin{exampleblock}{Vantagens}
         \begin{itemize}
-          \item \textbf{Portabilidade} — sem dependências
-          \item \textbf{Desempenho} — sem overhead dinâmico
-          \item \textbf{Confiabilidade} — imune ao DLL Hell
-          \item \textbf{Distribuição} simples
+          \item \textbf{Distribuição simplificada} em sistemas compatíveis
+          \item Menor risco de biblioteca \textbf{ausente ou incompatível}
+          \item \textbf{Versão controlada} da biblioteca incorporada
+          \item Inicialização potencialmente mais simples, sem parte da resolução dinâmica
         \end{itemize}
       \end{exampleblock}
     \end{column}
     \begin{column}{0.47\textwidth}
       \begin{alertblock}{Desvantagens}
         \begin{itemize}
-          \item \textbf{Tamanho} do executável maior
-          \item \textbf{Duplicação} de código em RAM
-          \item \textbf{Atualização} — recompilar tudo
-          \item \textbf{Memória} — consumo maior
+          \item O executável \textbf{tende a ser maior} que um equivalente com bibliotecas compartilhadas
+          \item Pode haver \textbf{duplicação} de código entre programas
+          \item Atualizar código incorporado exige \textbf{religação e redistribuição}
+          \item Algumas bibliotecas de sistema podem não oferecer versão estática
         \end{itemize}
       \end{alertblock}
     \end{column}
   \end{columns}
-  \vspace{0.4cm}
+  \vspace{0.10cm}
   \begin{center}
-    {\small\color{gray} Casos de uso: sistemas embarcados, CLIs, containers Docker, binários Go/Rust}
+    {\scriptsize\color{gray}
+    Casos comuns: sistemas embarcados e utilitários de linha de comando.
+    Containers e binários Go/Rust dependem da configuração e das bibliotecas utilizadas.}
   \end{center}
 \end{frame}
 
@@ -420,95 +453,157 @@ int main() {
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Código Fonte: Assembly x86\_64}
+\begin{frame}[fragile]{A ABI Conecta o Código C ao Assembly}
   \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
+    \begin{column}{0.52\textwidth}
       \begin{block}{\texttt{my\_strlen.s}}
-        \begin{lstlisting}[language=C]
+        \begin{lstlisting}[language=C,basicstyle=\ttfamily\scriptsize]
+.section .text
 .globl my_strlen
+.type my_strlen, @function
 my_strlen:
-    movq $0, %rax
+    xorq %rax, %rax
 .loop:
-    cmpb $0, (%rdi, %rax)
+    cmpb $0, (%rdi,%rax)
     je .end
     incq %rax
     jmp .loop
-.end: ret
+.end:
+    ret
         \end{lstlisting}
       \end{block}
     \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{exampleblock}{ABI System V AMD64}
+        \begin{itemize}\small
+          \item \texttt{\%rdi}: primeiro argumento, o ponteiro para a string
+          \item \texttt{\%rax}: valor retornado por \texttt{my\_strlen}
+          \item \texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx},
+                \texttt{\%rsi} e \texttt{\%rdi} são caller-saved
+        \end{itemize}
+      \end{exampleblock}
+      \vspace{0.2cm}
+      {\small \texttt{my\_reverse} também recebe a string em \texttt{\%rdi},
+      altera o buffer diretamente e não possui valor de retorno.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{my\_reverse} Busca as Extremidades e Troca os Bytes}
+  \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      \begin{block}{\texttt{my\_reverse.s} (Trecho)}
-        \begin{lstlisting}[language=C]
+      \begin{block}{1. Localizar o fim}
+        \begin{lstlisting}[language=C,basicstyle=\ttfamily\scriptsize]
+.section .text
 .globl my_reverse
+.type my_reverse, @function
 my_reverse:
     movq %rdi, %rsi
 .find_end:
     cmpb $0, (%rsi)
-    je .found_end
+    je .prepare
     incq %rsi
     jmp .find_end
-.found_end:
+.prepare:
+    cmpq %rdi, %rsi
+    je .done
     decq %rsi
-# ... (swap loop e ret)
+    movq %rdi, %rdx
         \end{lstlisting}
       \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{2. Trocar os bytes}
+        \begin{lstlisting}[language=C,basicstyle=\ttfamily\scriptsize]
+.swap:
+    cmpq %rsi, %rdx
+    jae .done
+    movb (%rdx), %al
+    movb (%rsi), %cl
+    movb %cl, (%rdx)
+    movb %al, (%rsi)
+    incq %rdx
+    decq %rsi
+    jmp .swap
+.done:
+    ret
+        \end{lstlisting}
+      \end{block}
+      \vspace{0.05cm}
+      {\scriptsize O código usa registradores caller-saved e testa a string
+      vazia antes de \texttt{decq}.}
     \end{column}
   \end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Processo de Ligação Estática}
-  \begin{block}{1. Compilacao e Criacao da Biblioteca (\texttt{.a})}
+  \begin{block}{1. Montagem e criação da biblioteca \texttt{.a}}
     \begin{lstlisting}[language=bash]
 $ as my_strlen.s -o my_strlen.o
 $ as my_reverse.s -o my_reverse.o
-$ ar rcs libstrutils.a my_strlen.o my_reverse.o
+# nao_usada.s exporta funcao_nao_usada e executa apenas ret
+$ as nao_usada.s -o nao_usada.o
+$ ar rcs libstrutils.a my_strlen.o my_reverse.o nao_usada.o
     \end{lstlisting}
   \end{block}
 
-  \begin{block}{2. Ligação Estática com o Programa C}
+  \begin{block}{2. Programa C e duas formas de ligação}
     \begin{lstlisting}[language=bash]
 $ gcc -c main.c -o main.o
-$ gcc main.o -L. -lstrutils -static -o programa
+# somente libstrutils.a ligada estaticamente; libc pode ser dinamica
+$ gcc main.o ./libstrutils.a -o programa_misto
+# executavel completamente estatico (requer libc estatica instalada)
+$ gcc -static main.o ./libstrutils.a -o programa
     \end{lstlisting}
   \end{block}
 
-  \vspace{0.2cm}
+  \vspace{0.10cm}
   \begin{center}
-    Resultado: \texttt{programa} — executável \alert{100\% independente}.
+    {\small A ordem importa: o objeto que cria as referências aparece antes da biblioteca que as resolve.}
   \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{Saída e Verificação}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
+      \begin{block}{Antes da ligação}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
+$ nm main.o | grep -E "my_strlen|my_reverse"
+                 U my_reverse
+                 U my_strlen
+        \end{lstlisting}
+      \end{block}
       \begin{block}{Execução}
-        \begin{lstlisting}[language=bash]
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
 $ ./programa
 Tamanho: 15
 Invertido: ocisaB erawtfoS
         \end{lstlisting}
       \end{block}
       \begin{block}{Tipo do arquivo}
-        \begin{lstlisting}[language=bash]
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
 $ file programa
-programa: ELF 64-bit LSB
-executable, x86-64,
+ELF 64-bit LSB executable, x86-64,
 statically linked
         \end{lstlisting}
       \end{block}
     \end{column}
     \begin{column}{0.48\textwidth}
-      \begin{block}{Símbolos da Biblioteca}
-        \begin{lstlisting}[language=bash]
-$ nm programa | grep -E
-  "my_strlen|my_reverse"
+      \begin{block}{Depois da ligação - endereços variam}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
+$ nm programa | grep -E "my_strlen|my_reverse"
 00000000004010a0 T my_strlen
 00000000004010c0 T my_reverse
         \end{lstlisting}
       \end{block}
-      \begin{block}{Verificacao com \texttt{ldd}}
-        \begin{lstlisting}[language=bash]
+      \begin{block}{Módulo não utilizado}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
+$ nm programa | grep funcao_nao_usada
+# nenhuma saida
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Verificação com \texttt{ldd}}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
 $ ldd programa
     not a dynamic executable
         \end{lstlisting}
@@ -519,43 +614,49 @@ $ ldd programa
 
 \begin{frame}[fragile]{Dentro da Biblioteca \texttt{.a}}
   \begin{columns}[T]
-    \begin{column}{0.47\textwidth}
-      \begin{block}{Conteúdo do Arquivo}
-        \begin{lstlisting}[language=bash]
-$ ar -t libstrutils.a
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Conteúdo do arquivo}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
+$ ar t libstrutils.a
 my_strlen.o
 my_reverse.o
+nao_usada.o
         \end{lstlisting}
       \end{block}
-      \begin{block}{Símbolos Exportados}
-        \begin{lstlisting}[language=bash]
-$ nm libstrutils.a
+      \begin{block}{Resumo dos símbolos exportados}
+        \begin{lstlisting}[language=bash,basicstyle=\ttfamily\tiny]
+$ nm -g --defined-only libstrutils.a
 my_strlen.o:
 0000000000000000 T my_strlen
 my_reverse.o:
 0000000000000000 T my_reverse
+nao_usada.o:
+0000000000000000 T funcao_nao_usada
         \end{lstlisting}
       \end{block}
     \end{column}
     \begin{column}{0.47\textwidth}
       \begin{center}
-        \vspace{0.3cm}
+        \vspace{0.15cm}
         \begin{tikzpicture}[
           box/.style={draw=primary!25, fill=lightbg, rounded corners=3pt,
-                      minimum width=3.8cm, minimum height=0.65cm,
-                      align=center, font=\small}
+                      minimum width=3.8cm, minimum height=0.60cm,
+                      align=center, font=\scriptsize}
         ]
-          \node[box, fill=primary, font=\small\color{white}\bfseries] (lib) at (0,3) {libstrutils.a};
-          \node[box] (o1) at (0,1.9) {my\_strlen.o / my\_reverse.o};
-          \node[box, font=\scriptsize, minimum width=1.8cm] (s1) at (-1.0,0.8) {my\_strlen()};
-          \node[box, font=\scriptsize, minimum width=1.8cm] (s2) at (1.0,0.8) {my\_reverse()};
+          \node[box, fill=primary, font=\scriptsize\color{white}\bfseries] (lib) at (0,3.1) {libstrutils.a};
+          \node[box] (o1) at (0,2.1) {my\_strlen.o};
+          \node[box] (o2) at (0,1.3) {my\_reverse.o};
+          \node[box, fill=danger!7, draw=danger!45] (o3) at (0,0.5) {nao\_usada.o};
           \draw[->, thick, accent] (lib) -- (o1);
-          \draw[->, thick, accent] (o1.south) -- (s1.north);
-          \draw[->, thick, accent] (o1.south) -- (s2.north);
+          \draw[->, thick, accent] (lib) -- (o2);
+          \draw[->, thick, accent] (lib) -- (o3);
         \end{tikzpicture}
       \end{center}
-      \vspace{0.3cm}
-      {\small\color{gray} O arquivo \texttt{.a} empacota os arquivos de objeto.}
+      \vspace{0.15cm}
+      \begin{exampleblock}{Seleção por módulo}
+        Como nenhum símbolo de \texttt{nao\_usada.o} é referenciado,
+        o linker não extrai esse módulo da biblioteca.
+      \end{exampleblock}
     \end{column}
   \end{columns}
 \end{frame}
@@ -573,23 +674,25 @@ my_reverse.o:
     ]
       \node[card] at (0,0) {\textbf{\large Ligador}\\[0.3cm]\small Combina \texttt{.o}'s\\em executável};
       \node[card] at (4.8,0) {\textbf{\large Biblioteca}\\[0.3cm]\small Código pré-compilado\\para reutilização};
-      \node[card] at (9.6,0) {\textbf{\large Lig. Estática}\\[0.3cm]\small Incorpora tudo\\no executável};
+      \node[card] at (9.6,0) {\textbf{\large Lig. Estática}\\[0.3cm]\small Incorpora módulos\\necessários da \texttt{.a}};
     \end{tikzpicture}
   \end{center}
   \vspace{0.5cm}
   \begin{itemize}
-    \item O Linker é \textbf{essencial} no pipeline de compilação
-    \item Ligação estática $\rightarrow$ executáveis \textbf{portáteis} e \textbf{autossuficientes}
-    \item Trade-off: \textbf{tamanho} vs \textbf{independência}
+    \item O Linker é \textbf{essencial} no processo de construção do programa
+    \item Ligação estática $\rightarrow$ distribuição mais simples em sistemas \textbf{compatíveis}
+    \item Trade-off frequente: possível aumento de \textbf{tamanho} vs menor dependência em tempo de execução
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Referências}
-  \begin{itemize}
+  \begin{itemize}\small
+    \item STALLINGS, William. \textit{Arquitetura e Organização de Computadores}. 8ª ed. Pearson, 2010.
+    \item Material da disciplina de Software Básico: representação de dados, Assembly, pilha, procedimentos e chamadas de sistema.
     \item BRYANT, R. E.; O'HALLARON, D. R. \textit{Computer Systems: A Programmer's Perspective}. 3ª ed. Pearson, 2015. Cap. 7.
     \item LEVINE, J. R. \textit{Linkers and Loaders}. Morgan Kaufmann, 1999.
-    \item GNU Binutils Documentation. \url{https://www.gnu.org/software/binutils/}
-    \item TANENBAUM, A. S. \textit{Sistemas Operacionais Modernos}. 4ª ed. Pearson, 2016.
+    \item GNU Binutils: documentação de \texttt{ld}, \texttt{ar}, \texttt{nm} e \texttt{readelf}. \url{https://www.gnu.org/software/binutils/}
+    \item \textit{System V Application Binary Interface: AMD64 Architecture Processor Supplement}.
   \end{itemize}
 \end{frame}
 

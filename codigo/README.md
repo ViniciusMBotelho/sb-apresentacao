@@ -1,62 +1,75 @@
-# Exemplo de Ligação Estática: C + Assembly x86_64
+# Exemplo de ligação estática: C + Assembly x86-64
 
-Este projeto prático demonstra como construir uma biblioteca estática em Assembly x86_64 e consumi-la em um programa escrito em C, realizando a ligação 100% estática do binário final.
+Este exemplo cria `libstrutils.a` com três módulos:
 
-## Estrutura do Projeto
-- `string_utils.h`: Cabeçalho C com as assinaturas das funções.
-- `my_strlen.s`: Implementação de `strlen` em Assembly x86_64 (GAS).
-- `my_reverse.s`: Implementação de inversão de strings em Assembly x86_64 (GAS).
-- `main.c`: Programa C principal que chama as funções utilitárias.
-- `Makefile`: Automação da compilação e do processo de ligação.
+- `my_strlen.o` e `my_reverse.o`, usados por `main.o`;
+- `nao_usada.o`, que demonstra que o linker não incorpora automaticamente todos
+  os módulos de uma biblioteca estática.
 
-## Como Executar
+## Construção
 
-### 1. Compilar e Gerar a Biblioteca Estática
-Para compilar as funções em Assembly, gerar a biblioteca estática `.a` e ligar com o executável final de forma estática, execute:
+Para gerar um executável de ligação mista:
+
 ```bash
 make
 ```
 
-O `make` executa os seguintes comandos:
+O resultado é `programa_misto`. As funções de `libstrutils.a` são incorporadas,
+mas a libc normalmente permanece como dependência dinâmica.
+
+Para tentar gerar um executável completamente estático:
+
 ```bash
-# Compilar os fontes Assembly (.s) para arquivos de objetos (.o)
+make programa
+```
+
+Esse segundo comando requer que a versão estática da libc e seus arquivos de
+desenvolvimento estejam instalados.
+
+Os comandos equivalentes são:
+
+```bash
 as my_strlen.s -o my_strlen.o
 as my_reverse.s -o my_reverse.o
+as nao_usada.s -o nao_usada.o
+ar rcs libstrutils.a my_strlen.o my_reverse.o nao_usada.o
+gcc -Wall -Wextra -O2 -c main.c -o main.o
 
-# Empacotar os arquivos de objeto na biblioteca estática (.a)
-ar rcs libstrutils.a my_strlen.o my_reverse.o
+# Somente libstrutils.a é ligada estaticamente.
+gcc main.o ./libstrutils.a -o programa_misto
 
-# Compilar o arquivo principal em C
-gcc -Wall -O2 -c main.c -o main.o
-
-# Realizar a ligação 100% estática (-static)
-gcc main.o -L. -lstrutils -static -o programa
+# Executável completamente estático.
+gcc -static main.o ./libstrutils.a -o programa
 ```
 
-### 2. Executar o Programa
+O objeto que cria referências aparece antes da biblioteca que as resolve.
+
+## Verificação
+
 ```bash
-./programa
+nm main.o | grep -E "my_strlen|my_reverse"
+nm programa_misto | grep -E "my_strlen|my_reverse"
+nm programa_misto | grep funcao_nao_usada
+file programa_misto
+ldd programa_misto
 ```
 
-### 3. Verificar que a Ligação foi Estática
-Para comprovar que o arquivo executável não depende de bibliotecas dinâmicas externas compartilhadas (como a `libc.so`), use o comando `file` ou `ldd`:
+Antes da ligação, `main.o` mostra `U` para `my_strlen` e `my_reverse`. Depois,
+essas funções aparecem definidas com `T` no executável. A busca por
+`funcao_nao_usada` não produz saída, pois seu módulo não foi solicitado.
+
+Para o executável completamente estático:
 
 ```bash
-# Verifique o formato do arquivo (deve mostrar "statically linked")
 file programa
-
-# Verifique as dependências dinâmicas (deve mostrar "not a dynamic executable")
 ldd programa
 ```
 
-### 4. Analisar os Símbolos no Executável
-Você pode inspecionar os símbolos importados da biblioteca estática usando o comando `nm`:
-```bash
-nm programa | grep -E "my_strlen|my_reverse"
-```
-Você verá os símbolos correspondentes definidos na seção de texto (`T`) do próprio executável.
+O primeiro comando deve indicar `statically linked`; o segundo normalmente
+informa `not a dynamic executable`.
 
-### 5. Limpar os Arquivos de Compilação
+## Limpeza
+
 ```bash
 make clean
 ```
