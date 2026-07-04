@@ -516,7 +516,7 @@ my_reverse:
         \begin{lstlisting}[language=C,basicstyle=\ttfamily\scriptsize]
 .swap:
     cmpq %rsi, %rdx
-    jae .done
+    jge .done
     movb (%rdx), %al
     movb (%rsi), %cl
     movb %cl, (%rdx)

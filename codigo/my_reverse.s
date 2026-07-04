@@ -22,7 +22,7 @@ my_reverse:
 
 .swap:
     cmpq %rsi, %rdx        # Compara se os ponteiros se cruzaram ou se encontraram
-    jae .done              # Se sim, a string foi totalmente invertida
+    jge .done              # Se sim, a string foi totalmente invertida
 
     movb (%rdx), %al       # Carrega o caractere da esquerda
     movb (%rsi), %cl       # Usa apenas registradores caller-saved da ABI
