@@ -1,0 +1,20 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+.latexbuild/
+
+# Temporary generated slide images
+page_out*.png
+
+# Code build outputs
+codigo/*.o
+codigo/*.a
+codigo/programa
+
+# Agent tools
+.agents/

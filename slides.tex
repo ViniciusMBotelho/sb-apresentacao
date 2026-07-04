@@ -1,0 +1,583 @@
+% ============================================================
+% Seminário – Software Básico
+% Grupo 2: Ligador (Linker), Bibliotecas e Ligação Estática
+% ============================================================
+\documentclass[aspectratio=169, 11pt]{beamer}
+
+% ---- Tema Moloch ----
+\usetheme[progressbar=frametitle, numbering=fraction, block=fill]{moloch}
+
+% ---- Paleta acadêmica ----
+\definecolor{primary}{RGB}{20,40,72}        % azul marinho institucional
+\definecolor{accent}{RGB}{0,105,148}        % azul petróleo
+\definecolor{lightbg}{RGB}{245,246,248}     % cinza claro para blocos
+\definecolor{codebg}{RGB}{240,241,244}      % fundo de código
+\definecolor{success}{RGB}{40,110,50}       % verde
+\definecolor{danger}{RGB}{170,40,40}        % vermelho
+
+\setbeamercolor{normal text}{fg=primary, bg=white}
+\setbeamercolor{alerted text}{fg=accent}
+\setbeamercolor{frametitle}{bg=primary, fg=white}
+\setbeamercolor{progress bar}{fg=accent, bg=primary!20}
+\setbeamercolor{block title}{fg=white, bg=primary!85}
+\setbeamercolor{block body}{fg=primary, bg=lightbg}
+\setbeamercolor{block title alerted}{fg=white, bg=danger}
+\setbeamercolor{block body alerted}{fg=primary, bg=danger!5}
+\setbeamercolor{block title example}{fg=white, bg=success!85}
+\setbeamercolor{block body example}{fg=primary, bg=success!5}
+
+% ---- Pacotes ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pifont}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ---- Ícones simples ----
+\newcommand{\cmark}{\textcolor{success}{\ding{51}}}
+\newcommand{\xmark}{\textcolor{danger}{\ding{55}}}
+
+% ---- Configuração de código ----
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{primary}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{accent},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framesep=3pt,
+  rulecolor=\color{primary!15},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=2,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=1.8em,
+  aboveskip=0.4em,
+  belowskip=0.2em,
+}
+
+% ---- Metadados ----
+\title{Ligador, Bibliotecas e Ligação Estática}
+\subtitle{Seminário de Software Básico}
+\author{Alberto Henrique \quad Gabriel Ramos \quad Ícaro Vinícius \quad Vinícius Macedo}
+\institute{Grupo 2}
+\date{2026}
+
+% ============================================================
+\begin{document}
+
+% ---- Slide 1: Capa ----
+\maketitle
+
+% ---- Slide 2: Roteiro ----
+\begin{frame}{Roteiro}
+  \tableofcontents
+\end{frame}
+
+% ============================================================
+\section{Contexto}
+% ============================================================
+
+\begin{frame}{Pipeline de Compilação}
+  \begin{center}
+    \begin{tikzpicture}[
+      node distance=1.4cm,
+      block/.style={draw=primary!40, fill=lightbg, rounded corners=3pt, minimum width=1.8cm, minimum height=0.7cm, align=center, font=\scriptsize},
+      arrow/.style={->, >=stealth, thick, color=primary!60}
+    ]
+      \node[block] (src) {Código Fonte\\(.c)};
+      \node[block, right of=src, node distance=2.5cm] (compiler) {Compilador /\\Montador};
+      \node[block, right of=compiler, node distance=2.5cm] (obj) {Arq. Objeto\\(.o)};
+      \node[block, right of=obj, node distance=2.5cm] (linker) {\textbf{Ligador}\\(Linker)};
+      \node[block, right of=linker, node distance=2.5cm] (exec) {Executável\\Final};
+
+      \draw[arrow] (src) -- (compiler);
+      \draw[arrow] (compiler) -- (obj);
+      \draw[arrow] (obj) -- (linker);
+      \draw[arrow] (linker) -- (exec);
+
+      \node[block, below of=linker, node distance=1.2cm] (libs) {Bibliotecas\\(.a / .lib)};
+      \draw[arrow] (libs) -- (linker);
+    \end{tikzpicture}
+  \end{center}
+  \vspace{0.2cm}
+  \begin{center}
+    O \alert{Linker} é a \textbf{última etapa} antes do executável final.
+  \end{center}
+\end{frame}
+
+% ============================================================
+\section{Definições}
+% ============================================================
+
+\begin{frame}{O que é o Ligador (Linker)?}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Definição}
+        Programa que \textbf{combina} múltiplos arquivos-objeto e bibliotecas em um \textbf{único executável}.
+      \end{block}
+      \vspace{0.4cm}
+      \begin{description}[\textbf{Saída:}]
+        \item[\textbf{Entrada:}] arquivos \texttt{.o} + bibliotecas
+        \item[\textbf{Processo:}] resolução de símbolos + relocação
+        \item[\textbf{Saída:}] executável binário
+      \end{description}
+      \vspace{0.2cm}
+      {\small\color{gray} Exemplos: \texttt{ld} (GNU), \texttt{link.exe} (MSVC)}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{center}
+        \resizebox{0.85\linewidth}{!}{
+          \begin{tikzpicture}[
+            node distance=1.1cm,
+            box/.style={draw=primary!30, fill=lightbg, rounded corners=3pt, minimum width=2.1cm, minimum height=0.55cm, align=center, font=\scriptsize},
+            linkerbox/.style={draw=accent, fill=accent!10, rounded corners=4pt, minimum width=2.7cm, minimum height=0.75cm, align=center, font=\small\bfseries, text=accent},
+            arrow/.style={->, >=stealth, thick, color=primary!50}
+          ]
+            \node[box] (o1) {main.o};
+            \node[box, below of=o1, node distance=0.75cm] (o2) {math.o};
+            \node[box, below of=o2, node distance=0.75cm] (a1) {libmath.a};
+
+            \node[linkerbox, right of=o2, node distance=2.7cm] (linker) {Ligador\\(Linker)};
+
+            \node[box, right of=linker, node distance=2.7cm, fill=primary!10, draw=primary] (exec) {programa\\(Executável)};
+
+            \draw[arrow] (o1.east) -- (linker.160);
+            \draw[arrow] (o2.east) -- (linker.west);
+            \draw[arrow] (a1.east) -- (linker.200);
+            \draw[arrow] (linker.east) -- (exec.west);
+          \end{tikzpicture}
+        }
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Bibliotecas}
+  \begin{block}{Definição}
+    Coleções de \textbf{código pré-compilado} empacotadas para \textbf{reutilização}.
+  \end{block}
+  \vspace{0.3cm}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{exampleblock}{Biblioteca Estática}
+        \begin{itemize}
+          \item Extensão: \texttt{.a} / \texttt{.lib}
+          \item Código \textbf{copiado} para o executável
+          \item Criada com \texttt{ar rcs}
+        \end{itemize}
+      \end{exampleblock}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{alertblock}{Biblioteca Dinâmica}
+        \begin{itemize}
+          \item Extensão: \texttt{.so} / \texttt{.dll}
+          \item Carregada em \textbf{runtime}
+          \item \textbf{Compartilhada} entre programas
+        \end{itemize}
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Ligação Estática}
+  \begin{columns}[T]
+    \begin{column}{0.50\textwidth}
+      \begin{block}{Definição}
+        Processo em que todo o código das bibliotecas é \textbf{incorporado} no executável em \textbf{tempo de compilação}.
+      \end{block}
+      \vspace{0.4cm}
+      \cmark \; Executável \textbf{autossuficiente}\\[0.25cm]
+      \cmark \; Não depende de \texttt{.so}/\texttt{.dll}\\[0.25cm]
+      \cmark \; Arquivo \textbf{maior}, mas \textbf{independente}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{center}
+        \begin{tikzpicture}[
+          box/.style={draw=primary!30, fill=lightbg, rounded corners=3pt, minimum width=3.8cm, minimum height=1.5cm, align=center, font=\scriptsize},
+          subbox/.style={draw=accent, fill=accent!10, rounded corners=2pt, minimum width=3.2cm, minimum height=0.45cm, align=center, font=\tiny\bfseries}
+        ]
+          \node[box, label={[font=\scriptsize\bfseries]above:Ligação Estática}] (static) {};
+          \node[subbox] (code) at (static.center) [yshift=0.3cm] {Código do Programa};
+          \node[subbox] (lib) at (static.center) [yshift=-0.3cm] {Biblioteca (.a) Incorporada};
+
+          \node[box, below of=static, node distance=2.2cm, label={[font=\scriptsize\bfseries]above:Ligação Dinâmica}] (dynamic) {};
+          \node[subbox] (code2) at (dynamic.center) [yshift=0.3cm] {Código do Programa};
+          \node[subbox, fill=white, draw=gray, dashed] (lib2) at (dynamic.center) [yshift=-0.3cm] {Referência a Biblioteca (.so)};
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{Processos e Etapas}
+% ============================================================
+
+\begin{frame}{Etapas do Ligador}
+  \vspace{-0.2cm}
+  \begin{center}
+    \begin{tikzpicture}[
+      stepbox/.style={draw=primary!30, fill=lightbg, rounded corners=4pt,
+                   minimum width=3.2cm, minimum height=0.9cm,
+                   align=center, font=\small\bfseries, text=primary},
+      num/.style={circle, fill=accent, text=white, font=\bfseries\footnotesize,
+                  minimum size=0.55cm, inner sep=0pt},
+      arr/.style={->, thick, color=accent!50, >=stealth, shorten >=2pt, shorten <=2pt}
+    ]
+      \node[num] (n1) at (0, 0.75) {1};
+      \node[stepbox] (s1) at (0,0) {Resolução\\de Símbolos};
+      \node[num] (n2) at (4.6, 0.75) {2};
+      \node[stepbox] (s2) at (4.6,0) {Relocação\\de Endereços};
+      \node[num] (n3) at (9.2, 0.75) {3};
+      \node[stepbox] (s3) at (9.2,0) {Geração do\\Executável};
+      \draw[arr] (s1) -- (s2);
+      \draw[arr] (s2) -- (s3);
+    \end{tikzpicture}
+  \end{center}
+  \vspace{0.3cm}
+  \begin{enumerate}
+    \item \textbf{Resolução de Símbolos} — associa cada referência à sua definição
+    \item \textbf{Relocação} — ajusta endereços para o espaço de memória final
+    \item \textbf{Geração} — mescla seções \texttt{.text}, \texttt{.data}, \texttt{.bss} no executável
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Resolução de Símbolos}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \begin{block}{Como funciona?}
+        \begin{itemize}
+          \item Cada \texttt{.o} tem uma \textbf{tabela de símbolos}
+          \item Símbolos \textbf{definidos} — funções/variáveis locais
+          \item Símbolos \textbf{indefinidos} — referências externas
+          \item Ligador \textbf{casa} referências $\leftrightarrow$ definições
+        \end{itemize}
+      \end{block}
+      \vspace{0.3cm}
+      \begin{alertblock}{Erro comum}
+        \texttt{undefined reference to `func'}
+      \end{alertblock}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \begin{center}
+        \begin{tikzpicture}[
+          filebox/.style={draw=primary!30, fill=lightbg, rounded corners=3pt, minimum width=3.5cm, minimum height=1.6cm, align=center, font=\scriptsize},
+          symbol/.style={font=\ttfamily\tiny, align=left}
+        ]
+          \node[filebox, label={[font=\scriptsize\bfseries]above:main.o}] (main) {};
+          \node[symbol] at (main.center) {
+            Chamada: \textbf{somar()}\\
+            \textcolor{red}{Símbolo Indefinido}
+          };
+
+          \node[filebox, below of=main, node distance=2.2cm, label={[font=\scriptsize\bfseries]above:math\_utils.o}] (math) {};
+          \node[symbol] at (math.center) {
+            Definição: \textbf{somar()}\\
+            \textcolor{green!50!black}{Símbolo Definido}
+          };
+
+          \draw[->, >=stealth, ultra thick, color=accent, out=180, in=180, looseness=1.4] (main.west) to node[left, font=\scriptsize\bfseries, text=accent] {Resolução} (math.west);
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Relocação de Endereços}
+  \begin{block}{Problema}
+    Cada \texttt{.o} assume endereço inicial \textbf{0x0}.
+    Quando combinados, os endereços \textbf{colidem}.
+  \end{block}
+  \vspace{0.3cm}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{exampleblock}{Antes \normalfont(endereços relativos)}
+        \texttt{main.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x0000}\\
+        \texttt{math.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x0000}
+      \end{exampleblock}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{block}{Depois \normalfont(endereços absolutos)}
+        \texttt{main.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x1000}\\
+        \texttt{math.o} \; $\rightarrow$ \texttt{.text} em \texttt{0x2000}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.4cm}
+  \begin{center}
+    O ligador \alert{recalcula} todos os endereços para posições finais no executável.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Geração do Executável}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+      \begin{block}{Arquivo gerado}
+        Formato \textbf{ELF} (Linux) ou \textbf{PE} (Windows):
+      \end{block}
+      \vspace{0.2cm}
+      \begin{itemize}
+        \item \textbf{\texttt{.text}} — código de máquina
+        \item \textbf{\texttt{.data}} — variáveis inicializadas
+        \item \textbf{\texttt{.bss}} — variáveis não inicializadas
+        \item \textbf{Header} — metadados, entry point
+        \item \textbf{Symbol Table} — para depuração
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{center}
+      \begin{tikzpicture}[
+        sec/.style={draw=primary!25, fill=lightbg, minimum width=4.2cm,
+                    minimum height=0.7cm, align=center, font=\small},
+      ]
+        \node[sec, fill=primary, font=\small\color{white}\bfseries] at (0,3.2) {ELF Header};
+        \node[sec] at (0,2.4) {\texttt{.text} (código)};
+        \node[sec] at (0,1.6) {\texttt{.data} (dados)};
+        \node[sec] at (0,0.8) {\texttt{.bss}};
+        \node[sec] at (0,0) {Tabela de Símbolos};
+      \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{Vantagens e Desvantagens}
+% ============================================================
+
+\begin{frame}{Ligação Estática — Prós e Contras}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{exampleblock}{Vantagens}
+        \begin{itemize}
+          \item \textbf{Portabilidade} — sem dependências
+          \item \textbf{Desempenho} — sem overhead dinâmico
+          \item \textbf{Confiabilidade} — imune ao DLL Hell
+          \item \textbf{Distribuição} simples
+        \end{itemize}
+      \end{exampleblock}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{alertblock}{Desvantagens}
+        \begin{itemize}
+          \item \textbf{Tamanho} do executável maior
+          \item \textbf{Duplicação} de código em RAM
+          \item \textbf{Atualização} — recompilar tudo
+          \item \textbf{Memória} — consumo maior
+        \end{itemize}
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+  \vspace{0.4cm}
+  \begin{center}
+    {\small\color{gray} Casos de uso: sistemas embarcados, CLIs, containers Docker, binários Go/Rust}
+  \end{center}
+\end{frame}
+
+% ============================================================
+\section{Exemplo Prático}
+% ============================================================
+
+\begin{frame}[fragile]{Código Fonte (Entrada)}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{block}{\texttt{math\_utils.h}}
+        \begin{lstlisting}[language=C]
+#ifndef MATH_UTILS_H
+#define MATH_UTILS_H
+int somar(int a, int b);
+int multiplicar(int a, int b);
+#endif
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{\texttt{math\_utils.c}}
+        \begin{lstlisting}[language=C]
+#include "math_utils.h"
+int somar(int a, int b) {
+    return a + b;
+}
+int multiplicar(int a, int b) {
+    return a * b;
+}
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{block}{\texttt{main.c}}
+        \begin{lstlisting}[language=C]
+#include <stdio.h>
+#include "math_utils.h"
+
+int main() {
+    int a = 5, b = 3;
+    printf("Soma: %d\n",
+           somar(a, b));
+    printf("Produto: %d\n",
+           multiplicar(a, b));
+    return 0;
+}
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Processo de Ligação}
+  \begin{block}{1. Compilar para objeto (\texttt{.o})}
+    \begin{lstlisting}[language=bash]
+$ gcc -c math_utils.c -o math_utils.o
+$ gcc -c main.c -o main.o
+    \end{lstlisting}
+  \end{block}
+
+  \begin{block}{2. Criar biblioteca estática (\texttt{.a})}
+    \begin{lstlisting}[language=bash]
+$ ar rcs libmath.a math_utils.o
+    \end{lstlisting}
+  \end{block}
+
+  \begin{block}{3. Ligar estaticamente}
+    \begin{lstlisting}[language=bash]
+$ gcc main.o -L. -lmath -static -o programa
+    \end{lstlisting}
+  \end{block}
+
+  \vspace{0.2cm}
+  \begin{center}
+    Resultado: \texttt{programa} — executável \alert{autossuficiente}.
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Saída e Verificação}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{block}{Execução}
+        \begin{lstlisting}[language=bash]
+$ ./programa
+Soma: 8
+Produto: 15
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Tipo do arquivo}
+        \begin{lstlisting}[language=bash]
+$ file programa
+programa: ELF 64-bit LSB
+executable, x86-64,
+statically linked
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{block}{Símbolos}
+        \begin{lstlisting}[language=bash]
+$ nm programa | grep -E
+  "somar|multiplicar"
+00000000004010a0 T somar
+00000000004010c0 T multiplicar
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Tamanho: estático vs dinâmico}
+        \begin{lstlisting}[language=bash]
+$ ls -lh programa*
+-rwx 872K programa
+-rwx  17K programa_dyn
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Dentro da Biblioteca \texttt{.a}}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{block}{Conteúdo}
+        \begin{lstlisting}[language=bash]
+$ ar -t libmath.a
+math_utils.o
+        \end{lstlisting}
+      \end{block}
+      \vspace{0.2cm}
+      \begin{block}{Símbolos do \texttt{.o}}
+        \begin{lstlisting}[language=bash]
+$ nm math_utils.o
+0000000000000000 T somar
+0000000000000020 T multiplicar
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{center}
+        \vspace{0.3cm}
+        \begin{tikzpicture}[
+          box/.style={draw=primary!25, fill=lightbg, rounded corners=3pt,
+                      minimum width=3.8cm, minimum height=0.65cm,
+                      align=center, font=\small}
+        ]
+          \node[box, fill=primary, font=\small\color{white}\bfseries] (lib) at (0,3) {libmath.a};
+          \node[box] (o1) at (0,1.9) {math\_utils.o};
+          \node[box, font=\scriptsize, minimum width=1.8cm] (s1) at (-1.0,0.8) {somar()};
+          \node[box, font=\scriptsize, minimum width=1.8cm] (s2) at (1.0,0.8) {multiplicar()};
+          \draw[->, thick, accent] (lib) -- (o1);
+          \draw[->, thick, accent] (o1.south) -- (s1.north);
+          \draw[->, thick, accent] (o1.south) -- (s2.north);
+        \end{tikzpicture}
+      \end{center}
+      \vspace{0.3cm}
+      {\small\color{gray} Um \texttt{.a} é um archive que agrupa \texttt{.o}'s.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{Considerações Finais}
+% ============================================================
+
+\begin{frame}{Resumo}
+  \begin{center}
+    \begin{tikzpicture}[
+      card/.style={draw=primary!20, fill=lightbg, rounded corners=6pt,
+                   minimum width=3.4cm, minimum height=2.2cm,
+                   align=center, font=\small, text=primary},
+    ]
+      \node[card] at (0,0) {\textbf{\large Ligador}\\[0.3cm]\small Combina \texttt{.o}'s\\em executável};
+      \node[card] at (4.8,0) {\textbf{\large Biblioteca}\\[0.3cm]\small Código pré-compilado\\para reutilização};
+      \node[card] at (9.6,0) {\textbf{\large Lig. Estática}\\[0.3cm]\small Incorpora tudo\\no executável};
+    \end{tikzpicture}
+  \end{center}
+  \vspace{0.5cm}
+  \begin{itemize}
+    \item O Linker é \textbf{essencial} no pipeline de compilação
+    \item Ligação estática $\rightarrow$ executáveis \textbf{portáteis} e \textbf{autossuficientes}
+    \item Trade-off: \textbf{tamanho} vs \textbf{independência}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Referências}
+  \begin{itemize}
+    \item BRYANT, R. E.; O'HALLARON, D. R. \textit{Computer Systems: A Programmer's Perspective}. 3ª ed. Pearson, 2015. Cap. 7.
+    \item LEVINE, J. R. \textit{Linkers and Loaders}. Morgan Kaufmann, 1999.
+    \item GNU Binutils Documentation. \url{https://www.gnu.org/software/binutils/}
+    \item TANENBAUM, A. S. \textit{Sistemas Operacionais Modernos}. 4ª ed. Pearson, 2016.
+  \end{itemize}
+\end{frame}
+
+{
+\setbeamercolor{background canvas}{bg=primary}
+\begin{frame}[plain]
+  \begin{center}
+    \vspace{2.5cm}
+    {\Huge\color{white}\textbf{Perguntas?}}\\[1cm]
+    {\large\color{accent!60!white} Obrigado pela atenção!}\\[0.5cm]
+    {\small\color{white!70} Grupo 2 — Alberto, Gabriel, Ícaro e Vinícius}
+  \end{center}
+\end{frame}
+}
+
+\end{document}
