@@ -385,42 +385,33 @@
 \section{Exemplo Prático}
 % ============================================================
 
-\begin{frame}[fragile]{Código Fonte (Entrada)}
+\begin{frame}[fragile]{Código Fonte: C (Interface)}
   \begin{columns}[T]
-    \begin{column}{0.47\textwidth}
-      \begin{block}{\texttt{math\_utils.h}}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\texttt{string\_utils.h}}
         \begin{lstlisting}[language=C]
-#ifndef MATH_UTILS_H
-#define MATH_UTILS_H
-int somar(int a, int b);
-int multiplicar(int a, int b);
+#ifndef STRING_UTILS_H
+#define STRING_UTILS_H
+
+long long my_strlen(const char *str);
+void my_reverse(char *str);
+
 #endif
         \end{lstlisting}
       \end{block}
-      \begin{block}{\texttt{math\_utils.c}}
-        \begin{lstlisting}[language=C]
-#include "math_utils.h"
-int somar(int a, int b) {
-    return a + b;
-}
-int multiplicar(int a, int b) {
-    return a * b;
-}
-        \end{lstlisting}
-      \end{block}
     \end{column}
-    \begin{column}{0.47\textwidth}
+    \begin{column}{0.48\textwidth}
       \begin{block}{\texttt{main.c}}
         \begin{lstlisting}[language=C]
 #include <stdio.h>
-#include "math_utils.h"
+#include "string_utils.h"
 
 int main() {
-    int a = 5, b = 3;
-    printf("Soma: %d\n",
-           somar(a, b));
-    printf("Produto: %d\n",
-           multiplicar(a, b));
+    char texto[] = "Software Basico";
+    long long len = my_strlen(texto);
+    printf("Tamanho: %lld\n", len);
+    my_reverse(texto);
+    printf("Invertido: %s\n", texto);
     return 0;
 }
         \end{lstlisting}
@@ -429,116 +420,10 @@ int main() {
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Processo de Ligação}
-  \begin{block}{1. Compilar para objeto (\texttt{.o})}
-    \begin{lstlisting}[language=bash]
-$ gcc -c math_utils.c -o math_utils.o
-$ gcc -c main.c -o main.o
-    \end{lstlisting}
-  \end{block}
-
-  \begin{block}{2. Criar biblioteca estática (\texttt{.a})}
-    \begin{lstlisting}[language=bash]
-$ ar rcs libmath.a math_utils.o
-    \end{lstlisting}
-  \end{block}
-
-  \begin{block}{3. Ligar estaticamente}
-    \begin{lstlisting}[language=bash]
-$ gcc main.o -L. -lmath -static -o programa
-    \end{lstlisting}
-  \end{block}
-
-  \vspace{0.2cm}
-  \begin{center}
-    Resultado: \texttt{programa} — executável \alert{autossuficiente}.
-  \end{center}
-\end{frame}
-
-\begin{frame}[fragile]{Saída e Verificação}
-  \begin{columns}[T]
-    \begin{column}{0.47\textwidth}
-      \begin{block}{Execução}
-        \begin{lstlisting}[language=bash]
-$ ./programa
-Soma: 8
-Produto: 15
-        \end{lstlisting}
-      \end{block}
-      \begin{block}{Tipo do arquivo}
-        \begin{lstlisting}[language=bash]
-$ file programa
-programa: ELF 64-bit LSB
-executable, x86-64,
-statically linked
-        \end{lstlisting}
-      \end{block}
-    \end{column}
-    \begin{column}{0.47\textwidth}
-      \begin{block}{Símbolos}
-        \begin{lstlisting}[language=bash]
-$ nm programa | grep -E
-  "somar|multiplicar"
-00000000004010a0 T somar
-00000000004010c0 T multiplicar
-        \end{lstlisting}
-      \end{block}
-      \begin{block}{Tamanho: estático vs dinâmico}
-        \begin{lstlisting}[language=bash]
-$ ls -lh programa*
--rwx 872K programa
--rwx  17K programa_dyn
-        \end{lstlisting}
-      \end{block}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}[fragile]{Dentro da Biblioteca \texttt{.a}}
-  \begin{columns}[T]
-    \begin{column}{0.47\textwidth}
-      \begin{block}{Conteúdo}
-        \begin{lstlisting}[language=bash]
-$ ar -t libmath.a
-math_utils.o
-        \end{lstlisting}
-      \end{block}
-      \vspace{0.2cm}
-      \begin{block}{Símbolos do \texttt{.o}}
-        \begin{lstlisting}[language=bash]
-$ nm math_utils.o
-0000000000000000 T somar
-0000000000000020 T multiplicar
-        \end{lstlisting}
-      \end{block}
-    \end{column}
-    \begin{column}{0.47\textwidth}
-      \begin{center}
-        \vspace{0.3cm}
-        \begin{tikzpicture}[
-          box/.style={draw=primary!25, fill=lightbg, rounded corners=3pt,
-                      minimum width=3.8cm, minimum height=0.65cm,
-                      align=center, font=\small}
-        ]
-          \node[box, fill=primary, font=\small\color{white}\bfseries] (lib) at (0,3) {libmath.a};
-          \node[box] (o1) at (0,1.9) {math\_utils.o};
-          \node[box, font=\scriptsize, minimum width=1.8cm] (s1) at (-1.0,0.8) {somar()};
-          \node[box, font=\scriptsize, minimum width=1.8cm] (s2) at (1.0,0.8) {multiplicar()};
-          \draw[->, thick, accent] (lib) -- (o1);
-          \draw[->, thick, accent] (o1.south) -- (s1.north);
-          \draw[->, thick, accent] (o1.south) -- (s2.north);
-        \end{tikzpicture}
-      \end{center}
-      \vspace{0.3cm}
-      {\small\color{gray} Um \texttt{.a} é um archive que agrupa \texttt{.o}'s.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}[fragile]{Exemplo Prático: Código Híbrido}
+\begin{frame}[fragile]{Código Fonte: Assembly x86\_64}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      \begin{block}{\texttt{my\_strlen.s} (Assembly x86\_64)}
+      \begin{block}{\texttt{my\_strlen.s}}
         \begin{lstlisting}[language=C]
 .globl my_strlen
 my_strlen:
@@ -553,41 +438,126 @@ my_strlen:
       \end{block}
     \end{column}
     \begin{column}{0.48\textwidth}
-      \begin{block}{\texttt{main.c} (C)}
+      \begin{block}{\texttt{my\_reverse.s} (Trecho)}
         \begin{lstlisting}[language=C]
-#include "string_utils.h"
-int main() {
-    char t[] = "Software Basico";
-    long long len = my_strlen(t);
-    my_reverse(t); // Inverte
-    printf("%lld: %s\n", len, t);
-    return 0;
-}
+.globl my_reverse
+my_reverse:
+    movq %rdi, %rsi
+.find_end:
+    cmpb $0, (%rsi)
+    je .found_end
+    incq %rsi
+    jmp .find_end
+.found_end:
+    decq %rsi
+# ... (swap loop e ret)
         \end{lstlisting}
       \end{block}
     \end{column}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Exemplo Prático: Ligação Estática}
-  \begin{block}{Passo a Passo da Ligação Estática}
+\begin{frame}[fragile]{Processo de Ligação Estática}
+  \begin{block}{1. Compilacao e Criacao da Biblioteca (\texttt{.a})}
     \begin{lstlisting}[language=bash]
-# 1. Compila o Assembly (.s) para objeto (.o)
 $ as my_strlen.s -o my_strlen.o
-
-# 2. Cria a biblioteca estatica (.a) empacotando os objetos
+$ as my_reverse.s -o my_reverse.o
 $ ar rcs libstrutils.a my_strlen.o my_reverse.o
-
-# 3. Compila o main.c e liga estaticamente (-static)
-$ gcc main.c -L. -lstrutils -static -o programa
     \end{lstlisting}
   \end{block}
-  \begin{exampleblock}{Verificação com \texttt{ldd}}
+
+  \begin{block}{2. Ligação Estática com o Programa C}
     \begin{lstlisting}[language=bash]
-$ ldd programa
-    not a dynamic executable  (Comprova ligacao estatica!)
+$ gcc -c main.c -o main.o
+$ gcc main.o -L. -lstrutils -static -o programa
     \end{lstlisting}
-  \end{exampleblock}
+  \end{block}
+
+  \vspace{0.2cm}
+  \begin{center}
+    Resultado: \texttt{programa} — executável \alert{100\% independente}.
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Saída e Verificação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Execução}
+        \begin{lstlisting}[language=bash]
+$ ./programa
+Tamanho: 15
+Invertido: ocisaB erawtfoS
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Tipo do arquivo}
+        \begin{lstlisting}[language=bash]
+$ file programa
+programa: ELF 64-bit LSB
+executable, x86-64,
+statically linked
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Símbolos da Biblioteca}
+        \begin{lstlisting}[language=bash]
+$ nm programa | grep -E
+  "my_strlen|my_reverse"
+00000000004010a0 T my_strlen
+00000000004010c0 T my_reverse
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Verificacao com \texttt{ldd}}
+        \begin{lstlisting}[language=bash]
+$ ldd programa
+    not a dynamic executable
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Dentro da Biblioteca \texttt{.a}}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{block}{Conteúdo do Arquivo}
+        \begin{lstlisting}[language=bash]
+$ ar -t libstrutils.a
+my_strlen.o
+my_reverse.o
+        \end{lstlisting}
+      \end{block}
+      \begin{block}{Símbolos Exportados}
+        \begin{lstlisting}[language=bash]
+$ nm libstrutils.a
+my_strlen.o:
+0000000000000000 T my_strlen
+my_reverse.o:
+0000000000000000 T my_reverse
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{center}
+        \vspace{0.3cm}
+        \begin{tikzpicture}[
+          box/.style={draw=primary!25, fill=lightbg, rounded corners=3pt,
+                      minimum width=3.8cm, minimum height=0.65cm,
+                      align=center, font=\small}
+        ]
+          \node[box, fill=primary, font=\small\color{white}\bfseries] (lib) at (0,3) {libstrutils.a};
+          \node[box] (o1) at (0,1.9) {my\_strlen.o / my\_reverse.o};
+          \node[box, font=\scriptsize, minimum width=1.8cm] (s1) at (-1.0,0.8) {my\_strlen()};
+          \node[box, font=\scriptsize, minimum width=1.8cm] (s2) at (1.0,0.8) {my\_reverse()};
+          \draw[->, thick, accent] (lib) -- (o1);
+          \draw[->, thick, accent] (o1.south) -- (s1.north);
+          \draw[->, thick, accent] (o1.south) -- (s2.north);
+        \end{tikzpicture}
+      \end{center}
+      \vspace{0.3cm}
+      {\small\color{gray} O arquivo \texttt{.a} empacota os arquivos de objeto.}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 % ============================================================
