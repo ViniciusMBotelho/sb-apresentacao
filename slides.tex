@@ -535,6 +535,61 @@ $ nm math_utils.o
   \end{columns}
 \end{frame}
 
+\begin{frame}[fragile]{Exemplo Prático: Código Híbrido}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\texttt{my\_strlen.s} (Assembly x86\_64)}
+        \begin{lstlisting}[language=C]
+.globl my_strlen
+my_strlen:
+    movq $0, %rax
+.loop:
+    cmpb $0, (%rdi, %rax)
+    je .end
+    incq %rax
+    jmp .loop
+.end: ret
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\texttt{main.c} (C)}
+        \begin{lstlisting}[language=C]
+#include "string_utils.h"
+int main() {
+    char t[] = "Software Basico";
+    long long len = my_strlen(t);
+    my_reverse(t); // Inverte
+    printf("%lld: %s\n", len, t);
+    return 0;
+}
+        \end{lstlisting}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Exemplo Prático: Ligação Estática}
+  \begin{block}{Passo a Passo da Ligação Estática}
+    \begin{lstlisting}[language=bash]
+# 1. Compila o Assembly (.s) para objeto (.o)
+$ as my_strlen.s -o my_strlen.o
+
+# 2. Cria a biblioteca estatica (.a) empacotando os objetos
+$ ar rcs libstrutils.a my_strlen.o my_reverse.o
+
+# 3. Compila o main.c e liga estaticamente (-static)
+$ gcc main.c -L. -lstrutils -static -o programa
+    \end{lstlisting}
+  \end{block}
+  \begin{exampleblock}{Verificação com \texttt{ldd}}
+    \begin{lstlisting}[language=bash]
+$ ldd programa
+    not a dynamic executable  (Comprova ligacao estatica!)
+    \end{lstlisting}
+  \end{exampleblock}
+\end{frame}
+
 % ============================================================
 \section{Considerações Finais}
 % ============================================================
