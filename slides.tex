@@ -84,32 +84,65 @@
 \section{Contexto}
 % ============================================================
 
-\begin{frame}{Pipeline de Compilação}
+\begin{frame}{A Entrada do Ligador: Múltiplos Arquivos}
   \begin{center}
+    \resizebox{0.95\linewidth}{!}{
     \begin{tikzpicture}[
-      node distance=1.4cm,
-      block/.style={draw=primary!40, fill=lightbg, rounded corners=3pt, minimum width=1.8cm, minimum height=0.7cm, align=center, font=\scriptsize},
-      arrow/.style={->, >=stealth, thick, color=primary!60}
+      file/.style={draw=primary!60, fill=white, minimum width=2.4cm, minimum height=0.8cm, align=center, font=\scriptsize},
+      asm/.style={draw=primary!80, dashed, fill=primary!10, minimum width=2.4cm, minimum height=0.8cm, align=center, font=\scriptsize},
+      linker/.style={draw=primary, thick, fill=primary!20, minimum width=2.4cm, minimum height=0.8cm, align=center, font=\scriptsize\bfseries},
+      lib/.style={draw=accent, fill=accent!15, minimum width=2.4cm, minimum height=0.8cm, align=center, font=\scriptsize},
+      arrow/.style={->, >=stealth, thick, color=primary!70}
     ]
-      \node[block] (src) {Código Fonte\\(.c)};
-      \node[block, right of=src, node distance=2.5cm] (compiler) {Compilador /\\Montador};
-      \node[block, right of=compiler, node distance=2.5cm] (obj) {Arq. Objeto\\(.o)};
-      \node[block, right of=obj, node distance=2.5cm] (linker) {\textbf{Ligador}\\(Linker)};
-      \node[block, right of=linker, node distance=2.5cm] (exec) {Executável\\Final};
 
-      \draw[arrow] (src) -- (compiler);
-      \draw[arrow] (compiler) -- (obj);
-      \draw[arrow] (obj) -- (linker);
+      % Linha 1
+      \node[file] (src1) at (0, 3) {Arquivo\\fonte \#1};
+      \node[asm]  (asm1) at (3.8, 3) {Montador};
+      \node[file] (obj1) at (7.6, 3) {Arquivo\\objeto \#1};
+
+      % Linha 2
+      \node[file] (src2) at (0, 1.5) {Arquivo\\fonte \#2};
+      \node[asm]  (asm2) at (3.8, 1.5) {Montador};
+      \node[file] (obj2) at (7.6, 1.5) {Arquivo\\objeto \#2};
+
+      % Linha 3
+      \node[file] (src3) at (0, 0) {Arquivo\\fonte \#3};
+      \node[asm]  (asm3) at (3.8, 0) {Montador};
+      \node[file] (obj3) at (7.6, 0) {Arquivo\\objeto \#3};
+
+      % Linha 4 (Reticências)
+      \node[file] (src4) at (0, -1.5) {\dots};
+      \node[asm]  (asm4) at (3.8, -1.5) {Montador};
+      \node[file] (obj4) at (7.6, -1.5) {\dots};
+
+      % Biblioteca, Ligador e Executável
+      \node[lib]    (lib)    at (11.4, 3.2) {Biblioteca\\do Programa};
+      \node[linker] (linker) at (11.4, 0.75) {Ligador\\(Linker)};
+      \node[file]   (exec)   at (15.2, 0.75) {Arquivo\\Executável};
+
+      % Setas Horizontais
+      \draw[arrow] (src1) -- (asm1); \draw[arrow] (asm1) -- (obj1);
+      \draw[arrow] (src2) -- (asm2); \draw[arrow] (asm2) -- (obj2);
+      \draw[arrow] (src3) -- (asm3); \draw[arrow] (asm3) -- (obj3);
+      \draw[arrow] (src4) -- (asm4); \draw[arrow] (asm4) -- (obj4);
+
+      % Setas Convergindo para o Ligador
+      \draw[arrow] (obj1.east) -- (linker.155);
+      \draw[arrow] (obj2.east) -- (linker.170);
+      \draw[arrow] (obj3.east) -- (linker.190);
+      \draw[arrow] (obj4.east) -- (linker.205);
+
+      % Setas da Biblioteca e de Saída
+      \draw[arrow] (lib) -- (linker);
       \draw[arrow] (linker) -- (exec);
 
-      \node[block, below of=linker, node distance=1.2cm] (libs) {Bibliotecas\\(.a / .lib)};
-      \draw[arrow] (libs) -- (linker);
-    \end{tikzpicture}
+    \end{tikzpicture}}
   \end{center}
-  \vspace{0.2cm}
-  \begin{center}
-    O \alert{Linker} é a \textbf{última etapa} antes do executável final.
-  \end{center}
+  \vspace{0.15cm}
+  \begin{block}{O Processo de Montagem}
+    \small Cada arquivo fonte é processado por uma instância separada do Montador. 
+    O \textbf{Ligador} é a ferramenta central que unifica todos os módulos soltos e resolve as dependências das bibliotecas.
+  \end{block}
 \end{frame}
 
 % ============================================================
