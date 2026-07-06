@@ -637,18 +637,22 @@ nao_usada.o:
     \begin{column}{0.47\textwidth}
       \begin{center}
         \vspace{0.15cm}
-        \begin{tikzpicture}[
-          box/.style={draw=primary!25, fill=lightbg, rounded corners=3pt,
-                      minimum width=3.8cm, minimum height=0.60cm,
-                      align=center, font=\scriptsize}
-        ]
-          \node[box, fill=primary, font=\scriptsize\color{white}\bfseries] (lib) at (0,3.1) {libstrutils.a};
-          \node[box] (o1) at (0,2.1) {my\_strlen.o};
-          \node[box] (o2) at (0,1.3) {my\_reverse.o};
-          \node[box, fill=danger!7, draw=danger!45] (o3) at (0,0.5) {nao\_usada.o};
-          \draw[->, thick, accent] (lib) -- (o1);
-          \draw[->, thick, accent] (lib) -- (o2);
-          \draw[->, thick, accent] (lib) -- (o3);
+        \begin{tikzpicture}
+          % Container de arquivo .a (representando a biblioteca estatica que abriga os .o)
+          \draw[draw=primary, fill=primary!5, dashed, rounded corners=5pt, thick] (-2.1, -0.4) rectangle (2.1, 2.3);
+          \node[font=\scriptsize\color{primary}\bfseries] at (0, 2.05) {libstrutils.a};
+
+          \node[draw=primary!25, fill=white, rounded corners=3pt,
+                minimum width=3.8cm, minimum height=0.55cm,
+                align=center, font=\scriptsize] (o1) at (0,1.45) {my\_strlen.o};
+                
+          \node[draw=primary!25, fill=white, rounded corners=3pt,
+                minimum width=3.8cm, minimum height=0.55cm,
+                align=center, font=\scriptsize] (o2) at (0,0.80) {my\_reverse.o};
+                
+          \node[draw=danger!45, fill=danger!5, rounded corners=3pt,
+                minimum width=3.8cm, minimum height=0.55cm,
+                align=center, font=\scriptsize] (o3) at (0,0.15) {nao\_usada.o};
         \end{tikzpicture}
       \end{center}
       \vspace{0.15cm}
