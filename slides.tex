@@ -461,7 +461,7 @@ int main() {
 .globl my_strlen
 .type my_strlen, @function
 my_strlen:
-    xorq %rax, %rax
+    movq $0, %rax
 .loop:
     cmpb $0, (%rdi,%rax)
     je .end
