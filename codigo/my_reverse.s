@@ -34,6 +34,3 @@ my_reverse:
 
 .done:
     ret                    # Retorna
-
-.size my_reverse, .-my_reverse
-.section .note.GNU-stack,"",@progbits
